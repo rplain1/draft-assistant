@@ -150,7 +150,12 @@ get_df_base <- function(df, draft_picks) {
                'aj dillon',
                'kadarius toney',
                'jameson williams',
-               'saquon barkley'
+               'saquon barkley',
+               'cam akers',
+               'christian kirk',
+               'treylon burks',
+               'dalton schultz',
+               'adam theilen'
                
                
              ) ~ 'Avoid',
@@ -161,7 +166,15 @@ get_df_base <- function(df, draft_picks) {
                'diontae johnson',
                'james cook',
                'brandin cooks',
-               'jaylen warren'
+               'jaylen warren',
+               'darren waller',
+               'drake london',
+               'pat freiermuth',
+               'anthony richardson',
+               'elijah moore',
+               'nick chubb',
+               'garrett wilson',
+               'austin ekeler'
                
              ) ~ 'Target',
              TRUE ~ '')) |>
@@ -211,8 +224,235 @@ get_df_base <- function(df, draft_picks) {
         select(team_abbr, ends_with('color')), 
       by=c('team'='team_abbr')
     ) |> 
-    head(200)
+    head(200) |> 
+    mutate(url = glue::glue(
+      "https://sleepercdn.com/content/nfl/players/thumb/{sleeper_id}.jpg"
+    ),
+    round = get_round(rank)) |> 
+    left_join(
+      teams |> select(team = team_abbr, team_logo_wikipedia),by='team'
+    )
 }
+
+
+
+orange_pal <- function(x) rgb(colorRamp(c("#ffe4aa", "#ff9500"))(x), maxColorValue = 255)
+blue_pal <- function(x) rgb(colorRamp(c("#aae4ff", "#0095ff"))(x), maxColorValue = 255)
+red_pal <- function(x) rgb(colorRamp(c("#ffaae4", "#ff1100"))(x), maxColorValue = 255)
+blue_pal <- function(x) rgb(colorRamp(c("#aae4ff", "#0095ff"))(x), maxColorValue = 255)
+BuYlRd <- function(x) rgb(colorRamp(c("#7fb7d7", "#ffffbf", "#fc8d59", bias = 3))(x), maxColorValue = 255)
+BuYlRd <- function(x) rgb(colorRamp(c("#000000","#004949","#009292","#ff6db6","#ffb6db",
+                                               "#490092","#006ddb","#b66dff","#6db6ff","#b6dbff",
+                                               "#920000","#924900","#db6d00","#24ff24","#ffff6d"))(x), maxColorValue = 255)
+                                               
+
+create_reactable <- function(df_base) {
+  df_base |> 
+    mutate(range = lower - upper) |> 
+    relocate(url, .after = position) |> 
+    relocate(team_logo_wikipedia, .after = team) |> 
+    relocate(target, .after = adp_formatted) |> 
+    select(-c(team, drafted, value, draft_position, age, sleeper_id, merge_name,
+              team_color, color_, tier, round, espn, sleeper, nfl, rt_sports, 
+              pos, round, avg_adp, avg)) |> 
+    reactable(
+      style = list(fontSize = "17px"),
+      defaultPageSize = 50,
+      striped = TRUE,
+      highlight = TRUE,
+      searchable = TRUE,
+      columns = list(
+        # avg_adp = colDef(
+        #   name = "Value",
+        #   format = colFormat(digits = 1),
+        #   style = function(x) {
+        #     if(is.na(x)) return()
+        #     if (x > 0) {
+        #       color <- make_color_pallete(viridisLite::viridis(20))(1/x)
+        #     } else if (x <= 0) {
+        #       color <- 'red'
+        #     } else {
+        #       color <- 'blue'
+        #     }
+        #     list(background = color)
+        #   }
+        # ),
+        ud_adp_diff = colDef(
+          name = "UD ADP Diff",
+          format = colFormat(digits = 1),
+          style = list(position = 'sticky', left = 0),
+          headerStyle = list(position = 'sticky', left = 0)
+        ),
+        stdev = colDef(
+          name = "Variability",
+          # Render the bar charts using a custom cell render function
+          cell = function(value) {
+            width <- value
+            bar_chart(value, width = width, fill = "#3fc1c9")
+          },
+          # And left-align the columns
+          align = "left",
+          style = list(position = 'sticky', left = 0),
+          headerStyle = list(position = 'sticky', left = 0)
+        ),
+        rank = colDef(
+          name = "ADP",
+          style = function(value, index) {
+            if (df_base$drafted[index] == TRUE) {
+              color <- "grey"
+            } else if (df_base$position[index] == "RB") {
+              color <- "#8ff2cacc"
+            } else if (df_base$position[index] == "WR") {
+              color <- "#56c9f8cc"
+            } else if (df_base$position[index] == "QB") {
+              color <- "#ef74a1cc"
+            } else if (df_base$position[index] == "TE") {
+              color <- "#feae58cc"
+            }
+            list(background = color, color = 'black')
+          },
+          
+        ),
+        position = colDef(
+          name = "Position",
+          align = 'center',
+          style = function(value, index) {
+            if (df_base$drafted[index] == TRUE) {
+              color <- "grey"
+            } else if (df_base$position[index] == "RB") {
+              color <- "#8ff2cacc"
+            } else if (df_base$position[index] == "WR") {
+              color <- "#56c9f8cc"
+            } else if (df_base$position[index] == "QB") {
+              color <- "#ef74a1cc"
+            } else if (df_base$position[index] == "TE") {
+              color <- "#feae58cc"
+            }
+            list(background = color, color = 'black')
+          }
+        ),
+        player = colDef(
+          name = "Player",
+          style = function(value, index) {
+            if (df_base$drafted[index] == TRUE) {
+              color <- "grey"
+            } else if (df_base$position[index] == "WR") {
+              color <- "#56c9f8cc"
+            } else if (df_base$position[index] == "QB") {
+              color <- "#ef74a1cc"
+            } else if (df_base$position[index] == "TE") {
+              color <- "#feae58cc"
+            } else if (df_base$position[index] == "RB") {
+              color <- "#8ff2cacc"
+            }
+            list(background = color, color = 'black')
+          }
+        ),
+        ud_rank_diff = colDef(
+          name = 'UD Rank Diff',
+          style = function(value) {
+            if(is.na(value)) return()
+            normalized <- ((value - min(df_base$ud_rank_diff)) / (max(df_base$ud_rank_diff) - min(df_base$ud_rank_diff)))
+            if(value >= 0) color <- blue_pal(normalized)
+            else color <- red_pal(normalized)
+            #color <- orange_pal(normalized)
+            list(background = color, color = 'black')
+          }
+        ),
+        url = colDef(
+          name = 'Headshot',
+          cell = reactablefmtr::embed_img(height = 166/2.8, width = 250/3),
+          style = function(value, index) {
+            if(df_base$drafted[index] == TRUE) color <- 'grey'
+                else color <- NULL
+                list(background = color)
+          }
+        ),
+        team_logo_wikipedia   = colDef(
+          name = 'Team',
+          cell = reactablefmtr::embed_img(height = 50, width = 75),
+          style = function(value, index) {
+            if(df_base$drafted[index] == TRUE) color <- 'grey'
+                else color <- df_base$team_color[index]
+                list(background = color)
+          }
+        ),
+        target = colDef(
+          name = 'Target',
+          align = 'center',
+          cell = function(value) {
+            if (value  == 'Avoid' ) {
+              shiny::icon("warning", class = "fas fa-3x", style = "color: red") 
+            } else if (value == 'Target') {
+              shiny::icon("thumbs-up", class = 'fas fa-3x', style = "color: cyan")
+            } else value
+          }
+        ),
+        adp_formatted = colDef(
+          name = 'Round',
+          align = 'center',
+          style = function(value, index) {
+            #if(!is.numeric(value)) return()
+            normalized <- (df_base$round[index] - min(df_base$round)) / (max(df_base$round) - min(df_base$round))
+            color <- BuYlRd(normalized)
+            list(background = color)
+          }
+        ),
+        bye = colDef(
+          name = 'Bye',
+          cell = reactablefmtr::color_tiles(
+            df_base, 
+            colors = c('red', 'yellow', 'orange', 'blue', 'green', 'pink', 'cyan'),
+            bias = 5,
+            text_size = 35
+          )
+        ),
+        ud_rank = colDef(name = 'UD Rank'),
+        pos_rank = colDef(name = 'UD Pos Rank'),
+        high = colDef(name = 'High'),
+        low = colDef(name = 'Low'),
+        ud_adp = colDef(name = 'UD ADP'),
+        adp = colDef(name = 'ADP'),
+        upper = colDef(name = 'Upper'),
+        lower = colDef(name = 'Lower')
+        
+        
+        
+      )
+      
+      
+    )
+  
+}
+
+
+bar_chart <- function(label, width = "100%", height = "0.875rem", fill = "#00bfc4", background = NULL) {
+  bar <- div(style = list(background = fill, width = width, height = height))
+  chart <- div(style = list(flexGrow = 1, marginLeft = "0.375rem", background = background), bar)
+  div(style = list(display = "flex", alignItems = "center"), label, chart)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 create_gt <- function(df_base) {
   df_base  |> 
