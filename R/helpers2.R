@@ -70,6 +70,8 @@ clean_fantasy_life_adp <- function(path, season = ffl::most_recent_season()) {
 
 get_base_table <- function(adp, draft_picks) {
 
+  teams <- nflreadr::load_teams()
+
   adp |>
   left_join(
     draft_picks |>
@@ -90,7 +92,66 @@ get_base_table <- function(adp, draft_picks) {
       ) ~ "Target",
       TRUE ~ ""
     )
-  )# |>
+  ) |>
   #mutate(position = ifelse(is.na(position), substr(pos, 1, 2), position))
+  rowwise() |>
+  mutate(
+    upper = floor(min(underdog, nffc, rt, yahoo, adp)),
+    lower = ceiling(max(underdog, nffc, rt, yahoo, adp))
+  ) |>
+  ungroup() |>
+  arrange(adp) |>
+  mutate(rank = row_number()) |>
+  group_by(position) |>
+  mutate(
+    tier = round(
+      lead(ifelse(drafted == FALSE & target != "Avoid", adp,
+        ifelse(drafted == FALSE & target == "Avoid", lead(adp),
+          lead(adp, 2)
+        )
+      )) - (adp)
+    ),
+    tier = ifelse(drafted == TRUE, NA, tier),
+    round_ = ceiling(rank / 12)
+  ) |>
+  ungroup() |>
+  group_by(round_) |>
+  mutate(
+    pick = row_number(),
+    pick = as.character(pick),
+    pick = ifelse(nchar(pick) == 1, paste0("0", pick), pick)
+  ) |>
+  ungroup() |>
+  mutate(adp_formatted = paste(round_, pick, sep = ".")) |>
+  select(-round_, -pick) |>
+  relocate(position, .before = team) |>
+  mutate(
+    color_ = case_when(
+      drafted == TRUE ~ "grey",
+      position == "TE" ~ "#feae58cc",
+      position == "QB" ~ "#ef74a1cc",
+      position == "RB" ~ "#8ff2cacc",
+      position == "WR" ~ "#56c9f8cc",
+      TRUE ~ "black"
+    )
+  ) |>
+  left_join(
+    teams |>
+      mutate(team_abbr = ifelse(team_abbr == "LA", "LAR", team_abbr)) |>
+      select(team_abbr, ends_with("color")),
+    by = c("team" = "team_abbr")
+  ) |>
+  head(300) |>
+  mutate(
+    url = glue::glue(
+      "https://sleepercdn.com/content/nfl/players/thumb/{sleeper_id}.jpg"
+    ),
+    round = get_round(rank)
+  ) |>
+  left_join(
+    teams |> select(team = team_abbr, team_logo_wikipedia),
+    by = "team"
+  )
+
 
 }
