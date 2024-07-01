@@ -3,3 +3,26 @@
   font-weight: bold;
   font-size: 24px;
 }
+
+.tag {
+  display: inline-block;
+  padding: 0.125rem 0.75rem;
+  border-radius: 15px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.status-paid {
+  background: hsl(116, 60%, 90%);
+  color: hsl(116, 30%, 25%);
+}
+
+.status-pending {
+  background: hsl(230, 70%, 90%);
+  color: hsl(230, 45%, 30%);
+}
+
+.status-canceled {
+  background: hsl(350, 70%, 90%);
+  color: hsl(350, 45%, 30%);
+}
