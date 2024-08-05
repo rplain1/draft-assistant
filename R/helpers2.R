@@ -10,8 +10,7 @@ AVOID <- c('javonte williams')
 
 # TODO: fix this to be dynamic to league and year
 get_draft_picks <- function(league_id = '996102938634387456', year = 2024) {
-  league_id <- league_id
-
+  
   my_league <- ffscrapr::ff_connect(platform = 'sleeper',
                                     season = year,
                                     league_id = league_id)
@@ -64,7 +63,7 @@ clean_fantasy_life_adp <- function(path, season = ffl::most_recent_season()) {
    ) |>
     select(player,
       team = team.x, merge_name, position, underdog
-      , rt, nffc, yahoo, adp, sleeper_id, adp
+      , rt, nffc, yahoo, adp, sleeper_id, sleeper, adp
     )
 
   empty_rows <- nrow(joined_table[ is.na(joined_table$sleeper_id) & joined_table$position %in% c('RB', 'WR','TE', 'QB'), ])
@@ -142,7 +141,7 @@ clean_ff_ids <- function(ff_ids) {
 ff_ids <- nflreadr::load_ff_playerids() |> 
   clean_ff_ids()
 
-player_stats <- nflreadr::load_player_stats(seasons = 2023, stat_type = c('offense'))
+#player_stats <- nflreadr::load_player_stats(seasons = 2023, stat_type = c('offense'))
 
 
 clean_ffc_adp <- function(ffc_adp, ff_ids) {
@@ -160,6 +159,10 @@ clean_ffc_adp <- function(ffc_adp, ff_ids) {
     inner_join(ff_ids |>
                  select(gsis_id, merge_name, sleeper_id, position, pfr_id) |>
                  filter(!is.na(gsis_id)), by = c("join_name" = "merge_name", "position" = "position")) |>
+    arrange(adp) |> 
+    mutate(
+      rank = row_number()
+    ) |> 
     group_by(season, position) |>
     arrange(adp) |>
     mutate(pos_rank = row_number()) |>
@@ -209,10 +212,10 @@ clean_base_table <- function(adp, draft_picks) {
       url = glue::glue(
         "https://sleepercdn.com/content/nfl/players/thumb/{sleeper_id}.jpg"
       ),
-      round = map(.x = draft_position, get_round)
+      round = map_dbl(.x = draft_position, get_round)
     ) |>
     left_join(
-      teams |> select(team = team_abbr, team_logo_wikipedia),
+      TEAMS |> select(team = team_abbr, team_logo_wikipedia),
       by = "team"
     )
   
@@ -235,13 +238,11 @@ draft_picks <- get_draft_picks()
 df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp.csv', 2024)
 df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
 
-
-
-
 df_adp
 
-
-df_base <- df_base |> mutate(drafted = ifelse(merge_name %in% c('ceedee lamb', 'tyreek hill', 'christian mccaffrey'), FALSE, drafted))
+df_base <- df_adp |> clean_base_table(draft_picks)
+df_base <- df_base |> 
+  mutate(drafted = if_else(join_name %in% c('ceedee lamb', 'tyreek hill', 'christian mccaffrey'), FALSE, drafted))
 
 library(reactable)
 
@@ -266,10 +267,12 @@ reactable(
 
 
 df_base |>
+  rename(player = name) |> 
   relocate(url, .after = position) |>
   relocate(team_logo_wikipedia, .after = team) |>
   relocate(target, .after = adp_formatted) |>
   relocate(rank, .before = player) |>
+  select(-c(player_id, season, join_name, ends_with('id'))) |> 
   reactable(
     style = list(fontSize = "17px"),
     defaultPageSize = 10,
@@ -312,7 +315,8 @@ df_base |>
       # ),
       rank = colDef(
         name = "ADP",
-        style = function(value, index) {
+        style = function(index) {
+          color <- "white"  # Default color
           if (df_base$drafted[index] == TRUE) {
             color <- "grey"
           } else if (df_base$position[index] == "RB") {
@@ -332,6 +336,7 @@ df_base |>
         name = "Position",
         align = 'center',
         style = function(value, index) {
+          color <- "white"  # Default color
           if (df_base$drafted[index] == TRUE) {
             color <- "grey"
           } else if (df_base$position[index] == "RB") {
@@ -349,6 +354,7 @@ df_base |>
       player = colDef(
         name = "Player",
         style = function(value, index) {
+          color <- "white"  # Default color
           if (df_base$drafted[index] == TRUE) {
             color <- "grey"
           } else if (df_base$position[index] == "WR") {
@@ -392,19 +398,34 @@ df_base |>
           } else value
         }
       ),
-      round = colDef(
-        name = 'Round',
-        align = 'center',
-        style = function(value, index) {
-          #if(!is.numeric(value)) return()
-          normalized <- (df_base$round[index] - min(df_base$round)) / (max(df_base$round) - min(df_base$round))
-          color <- BuYlRd(normalized)
-          list(background = color)
-        }
-      )
+      team = colDef(show = FALSE),
+      times_drafted = colDef(show = FALSE),
+      team_color = colDef(show = FALSE),
+      color_ = colDef(show = FALSE),
+      drafted = colDef(show = FALSE)
+      # round = colDef(
+      #   name = 'Round',
+      #   align = 'center',
+      #   style = function(value, index) {
+      #     #if(!is.numeric(value)) return()
+      #     normalized <- (df_base$round[index] - min(df_base$round)) / (max(df_base$round) - min(df_base$round))
+      #     color <- BuYlRd(normalized)
+      #     list(background = color)
+      #   }
+      # )
 
 
       )
 
 
     )
+
+
+
+
+
+
+
+
+
+
