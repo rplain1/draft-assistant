@@ -9,7 +9,7 @@ AVOID <- c('javonte williams')
 
 
 # TODO: fix this to be dynamic to league and year
-get_draft_picks <- function(league_id = '996102938634387456', year = 2024) {
+get_draft_picks <- function(league_id = '1045662785243389952', year = 2024) {
   
   my_league <- ffscrapr::ff_connect(platform = 'sleeper',
                                     season = year,
@@ -231,19 +231,19 @@ combine_ffc_fantasy_life_adp <- function(df_ffc, df_fantasy_life) {
     )
 }
 
-df_ffc <- get_ffc_adp('ppr', '2024') |> 
+df_ffc <- get_ffc_adp('2qb', '2024') |> 
   clean_ffc_adp(ff_ids)
 
 draft_picks <- get_draft_picks()
-df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp.csv', 2024)
+df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
 df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
 
 df_adp
 
 df_base <- df_adp |> clean_base_table(draft_picks)
 df_base <- df_base |> 
-  mutate(drafted = if_else(join_name %in% c('ceedee lamb', 'tyreek hill', 'christian mccaffrey'), FALSE, drafted))
-
+  mutate( across(c(rt, underdog, nffc, yahoo, adp), \(x) if_else(is.na(x), 999, x)),
+)
 library(reactable)
 
 
