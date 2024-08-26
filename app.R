@@ -4,39 +4,31 @@ library(rvest)
 library(gt)
 library(reactable)
 library(htmltools)
-source('R/helpers.R')
+source('R/helpers2.R')
 # Initial Load
-teams <- nflreadr::load_teams()
-adp <- read_csv('~/Downloads/FantasyPros_2023_Overall_ADP_Rankings (2).csv')
-player_ids <- nflreadr::load_ff_playerids()
+options(reactable.theme = reactableTheme(
+  color = "hsl(233, 9%, 87%)",
+  backgroundColor = "hsl(233, 9%, 19%)",
+  borderColor = "hsl(233, 9%, 22%)",
+  stripedColor = "hsl(233, 12%, 22%)",
+  highlightColor = "hsl(233, 12%, 24%)",
+  inputStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  selectStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonHoverStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonActiveStyle = list(backgroundColor = "hsl(233, 9%, 28%)")
+))
+TEAMS <- nflreadr::load_teams()
+TARGETS <- c('jaleel mclaughlin', 'garrett wilson', 'jonathan taylor')
+AVOID <- c('javonte williams', 'sam laporta', 'dak prescott', 'josh jacobs',
+           'courtland sutton', 'rhamondre stevenson', 'jerome ford')
 
-underdog_adp <-  read_csv('~/Downloads/Underdog 4for4 ADP (1).csv') |> 
-  janitor::clean_names() |> 
-  mutate(merge_name = ffscrapr::dp_clean_names(player, lowercase = TRUE)) |> 
-  mutate(merge_name = ifelse(player == 'Gabe Davis', 'gabriel davis', merge_name))
-
-URL <- "https://fantasyfootballcalculator.com/api/v1/adp/ppr?teams=12&year=2023"
-
-r <- GET(url = URL)
-ffc_adp <- jsonlite::fromJSON( rawToChar(r$content) ) |> 
-  pluck("players") |> 
-  mutate(
-    team = ifelse(name == 'Donovan Peoples-Jones', 'CLE', team),
-    merge_name = ffscrapr::dp_clean_names(name, lowercase=TRUE)
-  ) |> 
-  as_tibble()
-
-df <- get_base_adp(adp, player_ids, ffc_adp, underdog_adp)
-
-df_base <- df |> 
-  get_df_base(draft_picks = get_draft_picks()) 
-
-sleeper_players <- ffscrapr::sleeper_players()
-
-df <- get_base_adp(adp, player_ids, ffc_adp, underdog_adp)
-
-df_base <- df |> 
-  get_df_base(draft_picks = get_draft_picks()) 
+# df_ffc <- get_ffc_adp('2qb', '2024') |> 
+#   clean_ffc_adp(ff_ids)
+# 
+# #draft_picks <- get_draft_picks()
+# df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
+# df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
+# 
 
 
 # APP ------------------------------------
@@ -49,8 +41,16 @@ ui <- dashboardPage(skin = 'blue',
                       br(),
                       fluidRow(valueBoxOutput("draft_round", width = 12)),
                       fluidRow(valueBoxOutput("draft_pick", width = 12)),
-                      fluidRow(actionButton("refresh", "Refresh"), align = 'center n
-                               ')
+                      fluidRow(valueBoxOutput("players_taken", width = 12)),
+                      fluidRow(
+                        selectInput(
+                          inputId = "adp_type",
+                          label = "Choose ADP:",
+                          choices = c("2qb", "ppr", "half-ppr"),
+                          selected = "1qb"
+                        )
+                      ),
+                      fluidRow(actionButton("refresh", "Refresh"), align = 'center')
                     ),
                     dashboardBody(
                       tags$head(tags$style(HTML('
@@ -108,6 +108,7 @@ ui <- dashboardPage(skin = 'blue',
 server <- function(input, output) {
   
   PICK <- reactive({get_pick_number(draft_picks())})
+  PICK2 <- reactive({get_pick_number2(draft_picks())})
   
   draft_picks <- reactive({
     get_draft_picks()
@@ -117,11 +118,15 @@ server <- function(input, output) {
     get_positions_drafted(draft_picks())
   })
   
-  #output$draft_pick <- renderText(PICK)
-  #output$draft_round <- renderText(get_round(PICK))
-  
   output$draft_pick <- renderValueBox({
     valueBox("Draft Pick",
+             tags$p(PICK2(), style = 'font-size: 200%'),
+             color = 'light-blue'
+    )
+  })
+  
+  output$players_taken <- renderValueBox({
+    valueBox("Players Taken",
              tags$p(PICK(), style = 'font-size: 200%'),
              color = 'purple'
     )
@@ -129,7 +134,7 @@ server <- function(input, output) {
   
   output$draft_round <- renderValueBox({
     valueBox("Draft Round",
-             tags$p(get_round(PICK()), style = 'font-size: 200%'),
+             tags$p(get_round2(draft_picks()), style = 'font-size: 200%'),
              color = 'light-blue'
     )
   })
@@ -159,20 +164,34 @@ server <- function(input, output) {
     )
   })
   
-  dt <- reactive({
-    df |> 
-      get_df_base(draft_picks()) 
+  dat <- reactive({
+    
+    df_ffc <- get_ffc_adp(input$adp_type, '2024') |> 
+      clean_ffc_adp(ff_ids)
+    
+    #draft_picks <- get_draft_picks()
+    df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
+    df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
+    
+    df_adp |> clean_base_table(draft_picks()) |> 
+      mutate( across(c(rt, underdog, nffc, yahoo, adp), \(x) if_else(is.na(x), 999, x)))
   })
   
   output$draft_table <- renderReactable({
-    dt() |> 
+    
+    tmp <- dat()
+    tmp |> 
       create_reactable()
-  
-  
+    
   })
   
+  
+  
+  
   observeEvent(input$refresh, {
+    
     PICK <- reactive({get_pick_number(draft_picks())})
+    PICK2 <- reactive({get_pick_number2(draft_picks())})
     
     draft_picks <- reactive({
       get_draft_picks()
@@ -182,11 +201,15 @@ server <- function(input, output) {
       get_positions_drafted(draft_picks())
     })
     
-    #output$draft_pick <- renderText(PICK)
-    #output$draft_round <- renderText(get_round(PICK))
-    
     output$draft_pick <- renderValueBox({
       valueBox("Draft Pick",
+               tags$p(PICK2(), style = 'font-size: 200%'),
+               color = 'blue'
+      )
+    })
+    
+    output$players_taken <- renderValueBox({
+      valueBox("Players Taken",
                tags$p(PICK(), style = 'font-size: 200%'),
                color = 'purple'
       )
@@ -194,7 +217,7 @@ server <- function(input, output) {
     
     output$draft_round <- renderValueBox({
       valueBox("Draft Round",
-               tags$p(get_round(PICK()), style = 'font-size: 200%'),
+               tags$p(get_round2(draft_picks()), style = 'font-size: 200%'),
                color = 'light-blue'
       )
     })
@@ -224,17 +247,27 @@ server <- function(input, output) {
       )
     })
     
-    dt <- reactive({
-      df |> 
-        get_df_base(draft_picks()) 
+    dat <- reactive({
+      
+        df_ffc <- get_ffc_adp(input$adp_type, '2024') |> 
+          clean_ffc_adp(ff_ids)
+        
+        #draft_picks <- get_draft_picks()
+        df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
+        df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
+      
+      df_adp |> clean_base_table(draft_picks()) |> 
+        mutate( across(c(rt, underdog, nffc, yahoo, adp), \(x) if_else(is.na(x), 999, x)))
     })
     
     output$draft_table <- renderReactable({
-      dt() |> 
+      
+      tmp <- dat()
+      tmp |> 
         create_reactable()
       
-      
     })
+    
   })
   
   

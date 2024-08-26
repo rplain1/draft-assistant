@@ -2,11 +2,12 @@ library(httr)
 library(jsonlite)
 library(tidyverse)
 
-TEAMS <- nflreadr::load_teams()
-TARGETS <- c('jaleel mclaughlin')
-AVOID <- c('javonte williams')
-
-
+# TEAMS <- nflreadr::load_teams()
+# TARGETS <- c('jaleel mclaughlin', 'garrett wilson', 'jonathan taylor')
+# AVOID <- c('javonte williams', 'sam laporta', 'dak prescott', 'josh jacobs',
+#            'courtland sutton', 'rhamondre stevenson', 'jerome ford')
+# 
+# 
 
 # TODO: fix this to be dynamic to league and year
 get_draft_picks <- function(league_id = '1045662785243389952', year = 2024) {
@@ -28,6 +29,23 @@ get_pick_number <- function(draft_picks, team_size = 10) {
 }
 
 get_round <- function(pick_number) ceiling(pick_number/12)
+
+get_round2 <- function(draft_picks) {
+  all_picks <- tibble(round = 1:10) |> mutate(pick = list(1:10)) |> unnest(pick)
+  
+  all_picks |> mutate(pick_num = row_number()) |> anti_join(draft_picks) |> slice(1) |> pull(round)
+  
+    
+}
+
+get_pick_number2 <- function(draft_picks) {
+  all_picks <- tibble(round = 1:10) |> mutate(pick = list(1:10)) |> unnest(pick)
+  
+  all_picks |> mutate(pick_num = row_number()) |> anti_join(draft_picks) |> slice(1) |> pull(pick_num)
+  
+  
+}
+
 
 get_positions_drafted <- function(draft_picks) {
 
@@ -231,19 +249,19 @@ combine_ffc_fantasy_life_adp <- function(df_ffc, df_fantasy_life) {
     )
 }
 
-df_ffc <- get_ffc_adp('2qb', '2024') |> 
-  clean_ffc_adp(ff_ids)
-
-draft_picks <- get_draft_picks()
-df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
-df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
-
-df_adp
-
-df_base <- df_adp |> clean_base_table(draft_picks)
-df_base <- df_base |> 
-  mutate( across(c(rt, underdog, nffc, yahoo, adp), \(x) if_else(is.na(x), 999, x)),
-)
+# df_ffc <- get_ffc_adp('2qb', '2024') |> 
+#   clean_ffc_adp(ff_ids)
+# 
+# draft_picks <- get_draft_picks()
+# df_fantasy_life_adp <- clean_fantasy_life_adp('~/Downloads/nfl_adp (1).csv', 2024)
+# df_adp <- combine_ffc_fantasy_life_adp(df_ffc, df_fantasy_life_adp)
+# 
+# df_adp
+# 
+# df_base <- df_adp |> clean_base_table(draft_picks)
+# df_base <- df_base |> 
+#   mutate( across(c(rt, underdog, nffc, yahoo, adp), \(x) if_else(is.na(x), 999, x)),
+# )
 library(reactable)
 
 
@@ -258,21 +276,32 @@ BuYlRd <- function(x) rgb(colorRamp(c("#000000","#004949","#009292","#ff6db6","#
 
 
 
-reactable(
-  df_base
-)
-
-
-
+create_reactable <- function(df_base) {
+  
 
 
 df_base |>
-  rename(player = name) |> 
-  relocate(url, .after = position) |>
-  relocate(team_logo_wikipedia, .after = team) |>
-  relocate(target, .after = adp_formatted) |>
-  relocate(rank, .before = player) |>
-  select(-c(player_id, season, join_name, ends_with('id'))) |> 
+    select(
+      rank,
+      player = name,
+      position,
+      team_logo_wikipedia,
+      team,
+      url,
+      adp,
+      adp_formatted,
+      bye,
+      underdog,
+      pos_rank,
+      target,
+      high,
+      low,
+      stdev,
+      draft_position,
+      value,
+      round,
+      team_color
+    ) |> 
   reactable(
     style = list(fontSize = "17px"),
     defaultPageSize = 10,
@@ -280,27 +309,6 @@ df_base |>
     highlight = TRUE,
     searchable = TRUE,
     columns = list(
-      # avg_adp = colDef(
-      #   name = "Value",
-      #   format = colFormat(digits = 1),
-      #   style = function(x) {
-      #     if(is.na(x)) return()
-      #     if (x > 0) {
-      #       color <- make_color_pallete(viridisLite::viridis(20))(1/x)
-      #     } else if (x <= 0) {
-      #       color <- 'red'
-      #     } else {
-      #       color <- 'blue'
-      #     }
-      #     list(background = color)
-      #   }
-      # ),
-      # ud_adp_diff = colDef(
-      #   name = "UD ADP Diff",
-      #   format = colFormat(digits = 1),
-      #   style = list(position = 'sticky', left = 0),
-      #   headerStyle = list(position = 'sticky', left = 0)
-      # ),
       # stdev = colDef(
       #   name = "Variability",
       #   # Render the bar charts using a custom cell render function
@@ -374,7 +382,7 @@ df_base |>
         cell = reactablefmtr::embed_img(height = 166/2.8, width = 250/3),
         style = function(value, index) {
           if(df_base$drafted[index] == TRUE) color <- 'grey'
-          else color <- NULL
+          else color <- '#21283c'#df_base$team_color[index]
           list(background = color)
         }
       ),
@@ -398,11 +406,17 @@ df_base |>
           } else value
         }
       ),
+      bye = colDef(
+        name = 'Bye',
+        cell = reactablefmtr::color_tiles(
+          df_base,
+          colors = c('red', 'yellow', 'orange', 'blue', 'green', 'pink', 'cyan'),
+          bias = 5,
+          text_size = 35
+        )
+      ),
       team = colDef(show = FALSE),
-      times_drafted = colDef(show = FALSE),
-      team_color = colDef(show = FALSE),
-      color_ = colDef(show = FALSE),
-      drafted = colDef(show = FALSE)
+      team_color = colDef(show = FALSE)
       # round = colDef(
       #   name = 'Round',
       #   align = 'center',
@@ -420,7 +434,7 @@ df_base |>
 
     )
 
-
+}
 
 
 
